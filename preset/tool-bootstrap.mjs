@@ -37,8 +37,8 @@ export const inject = ['systemPrompt']
 
 /* ── task classifier (ported from router-standard, zero dependencies) ───── */
 
-const REACT_RE = /(开发|创建|写一个|生成|从零|做一个|游戏|网页|网站|构建|新项目|搭建|实现|做出|上线|落地|脚本|工具|应用|build|create|develop|generate|implement|make a|new project)/gi
-const SPEC_RE = /(修复|修一下|调试|重构|维护|排查|报错|出错|崩溃|优化|审查|review|fix|debug|refactor|maintain|repair|broken|break|为什么|异常|故障|迁移|升级|兼容)/gi
+const REACT_RE = /(开发|创建|写一个|写个|生成|从零|做一个|做个|搞一个|游戏|网页|网站|构建|新项目|搭建|实现|做出|上线|落地|脚本|工具|应用|添加|新增|build|create|develop|generate|implement|make a|new project)/gi
+const SPEC_RE = /(修复|修一下|修改|改一下|调整|完善|润色|排版|措辞|替换|删除|删掉|移除|去掉|清理|整理|调试|重构|维护|排查|报错|出错|崩溃|优化|审查|review|fix|debug|refactor|maintain|repair|broken|break|为什么|异常|故障|迁移|升级|兼容|edit|modify|tweak|adjust|update|polish|rename|delete|remove|cleanup)/gi
 
 function countHits(regex, text) {
   return [...String(text || '').matchAll(regex)].length
