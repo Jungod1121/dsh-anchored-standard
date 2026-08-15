@@ -1,0 +1,5 @@
+# The `dsh-anchored-standard` bundle layer: one installer entry that copies the
+# bundled preset into the user preset root on boot.
+- insert:
+    - id: anchored-standard-installer
+      name: dsh-anchored-standard

@@ -1,0 +1,33 @@
+{
+  "name": "dsh-anchored-standard",
+  "version": "1.0.0",
+  "description": "Two-phase DeepSeek Harness agent preset: Minimal-aligned bootstrap (bash+read on the first request), then the full Standard tool catalog after the first tool call or reply.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "preset/",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "agent-preset",
+    "preset",
+    "anchored-standard",
+    "deepseek-v4-pro"
+  ],
+  "license": "MIT"
+}

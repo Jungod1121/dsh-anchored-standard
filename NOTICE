@@ -1,0 +1,17 @@
+dsh-anchored-standard
+=====================
+
+This project is an independent, community-built agent preset for DeepSeek
+Harness (DSH).
+
+- It is NOT an official DeepSeek product, and it is not affiliated with or
+  endorsed by DeepSeek.
+- The two-phase "anchored bootstrap" design is inspired by the published work
+  of xiaobright (`xiaobright/dsh-anchored-standard`,
+  `xiaobright/modeltest`), whose repositories and evaluation results are
+  cited in the README. This implementation was written and verified
+  independently on a different harness version (0.1.0-rc.6).
+- The preset composition follows the structure of the shipped
+  `standard`/`minimal` agent presets of the official
+  deepseek-ai/deepseek-harness repository, which is licensed under its own
+  terms.
