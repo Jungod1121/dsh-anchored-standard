@@ -137,6 +137,10 @@ export function apply(ctx, config = {}) {
   const promoted = new Set()
   /** Per-session resolved mode (append-only across the process lifetime). */
   const modes = new Map()
+  /** First REAL user message text per session, captured from agent/pre-step
+   *  (the in-memory session.events array may not contain the first
+   *  user/message yet when the FIRST assembly runs — measured on rc.6). */
+  const firstTexts = new Map()
   let warned = false
   const warnOnce = (message) => {
     if (warned) return
@@ -148,9 +152,36 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  const messageText = (message) => {
+    if (!message) return ''
+    const content = Array.isArray(message.content) ? message.content : []
+    return content.map((c) => (typeof c === 'string' ? c : (c && c.text) || '')).join(' ')
+  }
+
+  /** Capture the first real user message of each session BEFORE the first
+   *  assembly runs (pre-step precedes prompt assembly in the step pipeline). */
+  ctx.on('agent/pre-step', async (payload, next) => {
+    const decision = await next()
+    try {
+      const session = payload && payload.agent && payload.agent.session
+      if (!session || firstTexts.has(session.id)) return decision
+      const messages = Array.isArray(payload.messages) ? payload.messages : []
+      const first = messages.find((m) => m && m.source && m.source.kind === 'user')
+      if (first === undefined) return decision // system reminders do not classify
+      const text = messageText(first)
+      if (text.trim()) firstTexts.set(session.id, text)
+    } catch {
+      // Observation only — never disturb the step pipeline.
+    }
+    return decision
+  })
+
   const resolveMode = (session) => {
     if (modes.has(session.id)) return modes.get(session.id)
-    const mode = sessionMode(session)
+    const cached = firstTexts.get(session.id)
+    const mode = cached !== undefined && cached.trim() !== ''
+      ? classifyTask(cached)
+      : sessionMode(session)
     modes.set(session.id, mode)
     return mode
   }
