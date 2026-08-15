@@ -42,25 +42,33 @@ sequenceDiagram
     participant M as DeepSeek V4 Pro
 
     U->>A: first message (new session)
-    A->>M: request #1<br/>system: "You are a helpful software engineer assistant."<br/>tools: bash + read
-    Note over M: reasoning chain anchors on the RL-aligned scaffold
-    M->>A: first tool/call — or first assistant/message
+    A->>M: request #1<br/>task-matched anchor persona<br/>tools: bash + read (± edit/write)
+    Note over M: reasoning chain anchors on the task-matched scaffold
+    M->>A: first tool/call
     Note over A: promotion signal (durable session event)
-    A->>M: request #2<br/>same system prompt · all 25 Standard tools
+    A->>M: request #2<br/>same persona · all 25 Standard tools
     Note over M: full-capability work continues on the anchored trajectory
 ```
 
-1. The system prompt is Minimal's complete prompt, byte-identical:
-   `You are a helpful software engineer assistant.`
-2. Request #1 exposes only the platform shell (`bash`/`pwsh`) plus `read`.
-3. After the session records its first durable `tool/call` **or** first
-   `assistant/message` (whichever comes first), every later request sees the
-   full Standard catalog. Request #1 always sees the bootstrap catalog;
-   request #2 always sees the full catalog — a text-only first reply can never
-   trap the session in bootstrap.
+1. The session's **first user message** picks the anchor:
 
-Promotion state lives in durable session events, so refresh and resume
-preserve it.
+   | Task | Persona | First-request tools |
+   |---|---|---|
+   | **spec** — fix / maintain / debug | Minimal's exact prompt | `bash` + `read` + `edit` |
+   | **react** — build / create from zero | hands-on doer prompt | `bash` + `read` + `write` |
+   | **weak** — ambiguous | model self-picks (Pro: classify instruction) | `bash` + `read` |
+
+   `glob`/`grep` stay out of every bootstrap catalog — measured trajectory
+   boundary for V4 Pro; `edit`/`write` are anchor-safe.
+2. On request #1 the persona is the ONLY prompt section and runtime contexts
+   are cleared — the cleanest possible opening.
+3. After the session records its first durable `tool/call`, every later
+   request sees the full Standard catalog; the chosen persona stays constant
+   and the remaining sections (plan-mode etc.) return. Nothing is injected
+   after turn one (measured: post-anchor guidance hurts Pro).
+
+Mode and promotion state live in durable session events, so refresh and
+resume preserve them.
 
 ## Install
 
@@ -105,15 +113,19 @@ seq 137 -> 25 tools ['ask_user_question', 'bash', ...]     # request #2 (promote
 | | You get | Trade-off |
 |---|---|---|
 | vs Minimal | 23 more tools: glob/grep/edit/write/web_search/subagents/workflows/skills/goals/todo… | one extra reasoning round for the bootstrap |
-| vs Standard | the RL-aligned trajectory anchor (98/99 vs 91/92 in the reference eval) | plan-mode text etc. is shadowed by the complete Minimal persona |
+| vs Standard | task-matched trajectory anchors (98/99 vs 91/92 in the reference eval) + a first turn that is cleaner than Standard's | the first-request catalog is decided by keyword classification — ambiguous tasks fall back to the weak anchor and let the model pick |
 
 ## Evidence & honest boundaries
 
-- Mechanism (bootstrap catalog → full catalog) is verified on harness
-  `0.1.0-rc.6` at the wire level.
+- Mechanism (task-matched bootstrap catalog → full catalog) is verified on
+  harness `0.1.0-rc.6` at the wire level; the classifier and anchor tables are
+  unit-tested.
 - The 98/99 ability scores are `xiaobright/modeltest` Project2 V4.1b — **n=2
   on one frozen task**. They are reproducible evidence for that task, not a
-  universal guarantee across models or workloads.
+  universal guarantee across models or workloads. The spec/react/weak anchor
+  design incorporates measured findings from
+  `yjh051108/dsh-router-standard` (P1-P24) and xiaobright's trajectory
+  boundary probes.
 - V4 Flash does not need this: it generalizes across harnesses (style changes,
   scores don't). This preset targets **Pro** with `reasoningEffort: max`.
 

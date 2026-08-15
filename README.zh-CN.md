@@ -39,23 +39,30 @@ sequenceDiagram
     participant M as DeepSeek V4 Pro
 
     U->>A: 第一条消息（新会话）
-    A->>M: 请求 #1<br/>system: "You are a helpful software engineer assistant."<br/>tools: bash + read
-    Note over M: 推理链锚定在 RL 对齐的开局上
-    M->>A: 首个 tool/call —— 或首个 assistant/message
+    A->>M: 请求 #1<br/>任务匹配的锚定 persona<br/>tools: bash + read（± edit/write）
+    Note over M: 推理链锚定在任务匹配的开局上
+    M->>A: 首个 tool/call
     Note over A: 晋升信号（持久化会话事件）
-    A->>M: 请求 #2<br/>同一 system prompt · 全部 25 个 Standard 工具
+    A->>M: 请求 #2<br/>同一 persona · 全部 25 个 Standard 工具
     Note over M: 后续完整能力工作沿已锚定轨迹继续
 ```
 
-1. system prompt 固定为 Minimal 原句（字节级一致）：
-   `You are a helpful software engineer assistant.`
-2. 请求 #1 只暴露平台 shell（`bash`/`pwsh`）+ `read`；
-3. 会话产生首个持久化 `tool/call` **或** 首个 `assistant/message`
-   （先到者为准）后，之后所有请求看到完整 Standard 目录。请求 #1 永远是
-   bootstrap 目录，请求 #2 永远是完整目录——纯文本首轮回复也不会把会话困在
-   窄目录里。
+1. 会话的**第一条用户消息**决定锚的类型：
 
-晋升状态存在持久化会话事件里，刷新页面、恢复会话都不会回退。
+   | 任务 | Persona | 首轮工具 |
+   |---|---|---|
+   | **spec** — 修复 / 维护 / 调试 | Minimal 原句 | `bash` + `read` + `edit` |
+   | **react** — 从零构建 / 新项目 | 实干者句（少废话、直接产出） | `bash` + `read` + `write` |
+   | **weak** — 语义模糊 | 模型自分类（Pro：分类指令版） | `bash` + `read` |
+
+   `glob`/`grep` 不进任何 bootstrap 目录——实测是 V4 Pro 的轨迹分界；
+   `edit`/`write` 均锚定安全。
+2. 请求 #1 时 persona 是**唯一** prompt section，运行时上下文清空——最干净的开局；
+3. 会话产生首个持久化 `tool/call` 后，之后所有请求看到完整 Standard 目录，
+   所选 persona 保持恒定，其余 section（plan-mode 等）恢复。首轮之后不再
+   注入任何引导（实测：事后引导对 Pro 有害）。
+
+分类与晋升状态都来自持久化会话事件，刷新页面、恢复会话都不会回退。
 
 ## 安装
 
@@ -98,13 +105,16 @@ seq 137 -> 25 个工具 ['ask_user_question', 'bash', ...]  # 请求 #2（已晋
 | | 得到 | 代价 |
 |---|---|---|
 | 相对 Minimal | 多 23 个工具：glob/grep/edit/write/web_search/子代理/工作流/技能/目标/todo… | 开局多一轮推理 |
-| 相对 Standard | RL 对齐的轨迹锚定（参考评测 98/99 vs 91/92） | Minimal 完整 persona 会压住 plan-mode 等注入文本 |
+| 相对 Standard | 任务匹配的轨迹锚定（参考评测 98/99 vs 91/92）+ 比 Standard 更干净的首轮 | 首轮目录由关键词分类决定；模糊任务回落到 weak 锚交给模型自选 |
 
 ## 证据与边界（诚实声明）
 
-- 机制（bootstrap 目录 → 完整目录）已在 harness `0.1.0-rc.6` 上于 wire 层验证；
+- 机制（任务匹配 bootstrap 目录 → 完整目录）已在 harness `0.1.0-rc.6` 上于
+  wire 层验证；分类器与锚表有单元测试；
 - 98/99 的能力分来自 `xiaobright/modeltest` Project2 V4.1b——**同一冻结题面
-  n=2**。它是该题面的可复现证据，不构成跨模型、跨任务的通用保证；
+  n=2**。它是该题面的可复现证据，不构成跨模型、跨任务的通用保证。spec/react/weak
+  三锚设计融合了 `yjh051108/dsh-router-standard`（P1-P24）的实测与 xiaobright
+  的轨迹分界探针；
 - V4 Flash 不需要这套：它跨 harness 泛化更稳（风格会变、分数不变）。本预设
   面向 **Pro** + `reasoningEffort: max`。
 

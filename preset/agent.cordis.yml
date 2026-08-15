@@ -1,17 +1,18 @@
-# The `anchored-standard` user preset: Minimal-aligned bootstrap, then the full
-# Standard tool catalog after the first durable promotion signal.
+# The `anchored-standard` user preset (v2): task-aware first-request anchors,
+# then the full Standard tool catalog after the first durable tool call.
 #
 # Composition plan (verified on harness 0.1.0-rc.6):
-#   1. The Minimal persona is the COMPLETE system prompt, byte-identical to the
-#      shipped `minimal` preset, so harness identity, Web orientation, tool
-#      guidance, and later assembly listeners cannot add prompt text.
-#   2. `tool-bootstrap` narrows the FIRST model request of a session to one
-#      native shell plus `read`. After the session records its first durable
-#      `tool/call` or `assistant/message` (whichever comes first), every later
-#      request sees the full Standard catalog below. Request #1 always sees the
-#      bootstrap catalog; request #2 always sees the full catalog.
-#   3. Everything else is the shipped `standard` composition, so promoted
-#      sessions keep the complete Standard capability surface.
+#   1. `tool-bootstrap` classifies the session's FIRST user message into an
+#      anchor — spec (fix/maintain: Minimal persona + bash/read/edit), react
+#      (build/create: doer persona + bash/read/write), or weak (ambiguous:
+#      model self-picks + bash/read). `glob`/`grep` stay out of the bootstrap
+#      catalogs (measured trajectory boundary for V4 Pro).
+#   2. On the first request the persona is the ONLY prompt section and
+#      runtime contexts are cleared — the cleanest possible opening.
+#   3. After the first durable `tool/call`, every later request sees the
+#      full Standard catalog; the chosen persona stays constant and the
+#      remaining sections (plan-mode etc.) return. Nothing is injected
+#      after turn one (measured: anchors hurt Pro).
 #
 # This is a community preset. It is not an official DeepSeek preset and is not
 # affiliated with or endorsed by DeepSeek. The upstream harness is a developer
@@ -19,16 +20,13 @@
 
 # ── identity ────────────────────────────────────────────────────────────────
 
-# Keep this text byte-identical to the Minimal preset. `complete` prevents the
-# harness identity and per-tool guidance from changing the system prompt, while
-# runtime-context suppression leaves task and repository rules to user messages
-# and explicit file reads.
+# Fallback persona only: `tool-bootstrap` replaces the persona section on
+# every assembly with the task-matched anchor persona (spec/react/weak).
+# Keep this text byte-identical to the Minimal preset as the safe fallback.
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
     text: You are a helpful software engineer assistant.
-    complete: true
-    includeRuntimeContext: false
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
@@ -197,14 +195,11 @@
 
 # ── anchored bootstrap (LAST: the final filter over the assembled catalog) ──
 
-# Keep the FIRST model request of every session on one native shell plus
-# `read`; after the session records its first durable `tool/call` or
-# `assistant/message` (whichever comes first), later step assemblies expose
-# every Standard tool registered above. Request #1 always sees the bootstrap
-# catalog; request #2 always sees the full catalog.
+# Task-aware first-request anchors (v2): the first user message picks the
+# anchor — spec (fix: bash+read+edit, Minimal persona), react (build:
+# bash+read+write, doer persona), or weak (ambiguous: bash+read, model
+# self-picks). After the session records its first durable `tool/call`,
+# later step assemblies expose every Standard tool registered above while
+# the chosen persona stays and the other prompt sections return.
 - id: tool-bootstrap
   name: ./tool-bootstrap.mjs
-  config:
-    shellTools: [bash, pwsh]
-    commonTools: [read]
-    promoteEvents: [tool/call, assistant/message]

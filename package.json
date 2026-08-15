@@ -1,7 +1,7 @@
 {
   "name": "dsh-anchored-standard",
-  "version": "1.0.0",
-  "description": "Two-phase DeepSeek Harness agent preset: Minimal-aligned bootstrap (bash+read on the first request), then the full Standard tool catalog after the first tool call or reply.",
+  "version": "1.1.0",
+  "description": "Task-aware two-phase DeepSeek Harness preset: spec/react/weak first-request anchors (bash+read±edit/write), then the full Standard tool catalog after the first tool call.",
   "type": "module",
   "main": "index.js",
   "exports": {

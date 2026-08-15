@@ -1,24 +1,32 @@
 /**
- * Anchored tool bootstrap — keep the FIRST model request of every session on
- * a small tool surface (one native shell plus `read`), then expose the full
- * preset catalog once the session records its first durable promotion signal.
+ * Anchored tool bootstrap v2 — task-aware reasoning-mode anchors.
  *
- * The phase is derived from durable session events (append-only), so resume
- * and reload preserve it. By default a session promotes after the first
- * `tool/call` OR the first `assistant/message`, whichever comes first:
- * request #1 always sees the bootstrap catalog and request #2 always sees the
- * full catalog, so a text-only first reply can never trap the session in
- * bootstrap.
+ * Classifies the session's FIRST user message into one of three anchors and
+ * keeps the first model request on a small, task-matched tool surface:
  *
- * Robustness:
- *  - Promotion is memoized per session id for the process lifetime.
- *  - A missing bootstrap tool degrades to the full catalog with a one-time
- *    warning instead of failing requests, so composition drift cannot brick
- *    a session.
- *  - Any filter failure also degrades to the full catalog.
+ *   spec  (fix / maintain / debug)   → Minimal persona,  bash + read + edit
+ *   react (build / create / from 0) → doer persona,     bash + read + write
+ *   weak  (ambiguous)               → model self-picks; bash + read only
  *
- * Mechanism verified on harness 0.1.0-rc.6 via wire-level `request/header`
- * snapshots: 2 tools on the first request, full catalog from request #2 on.
+ * After the session records its first durable `tool/call`, every later
+ * request sees the full preset catalog; the chosen persona stays constant,
+ * runtime contexts are cleared, and the remaining prompt sections (plan-mode
+ * etc.) come back. The mode derives from durable session events, so resume
+ * and reload preserve it.
+ *
+ * Design boundaries (measured evidence):
+ *  - `glob` is a trajectory boundary for V4 Pro (xiaobright probes): a
+ *    first-turn catalog with glob breaks the Minimal-like anchor. `grep` is
+ *    unverified. Both stay out of the bootstrap catalogs.
+ *  - `bash+edit` and `bash+write` both keep the Minimal-like anchor
+ *    (xiaobright probes), so the spec/react catalogs use them.
+ *  - Pro does NOT want post-anchor injected guidance (router-standard P24:
+ *    anchors hurt Pro). Flash benefits from neutral persona + classify
+ *    instruction (router-standard P11). Nothing is injected after turn one.
+ *
+ * Robustness: promotion is memoized per session; mode is memoized per
+ * session; a missing bootstrap tool degrades to the full catalog instead of
+ * throwing; any filter failure also degrades to the full catalog.
  */
 
 /** Cordis plugin name used by loader diagnostics. */
@@ -27,27 +35,108 @@ export const name = 'anchored-tool-bootstrap'
 /** Prompt assembly must exist before this request filter can register. */
 export const inject = ['systemPrompt']
 
-/** Durable session event types that count as a promotion signal. */
-const DEFAULT_PROMOTE_EVENTS = ['tool/call', 'assistant/message']
+/* ── task classifier (ported from router-standard, zero dependencies) ───── */
 
-function stringList(value, field, fallback) {
-  if (value === undefined || value === null) return [...fallback]
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new TypeError(`${name}: ${field} must be a non-empty array of strings`)
-  }
-  if (value.some((item) => typeof item !== 'string' || item.length === 0)) {
-    throw new TypeError(`${name}: ${field} must contain only non-empty strings`)
-  }
-  return [...new Set(value)]
+const REACT_RE = /(开发|创建|写一个|生成|从零|做一个|游戏|网页|网站|构建|新项目|搭建|实现|做出|上线|落地|脚本|工具|应用|build|create|develop|generate|implement|make a|new project)/gi
+const SPEC_RE = /(修复|修一下|调试|重构|维护|排查|报错|出错|崩溃|优化|审查|review|fix|debug|refactor|maintain|repair|broken|break|为什么|异常|故障|迁移|升级|兼容)/gi
+
+function countHits(regex, text) {
+  return [...String(text || '').matchAll(regex)].length
 }
 
-export function apply(ctx, config = {}) {
-  const shellTools = stringList(config.shellTools, 'shellTools', ['bash', 'pwsh'])
-  const commonTools = stringList(config.commonTools, 'commonTools', ['read'])
-  const promoteEvents = new Set(stringList(config.promoteEvents, 'promoteEvents', DEFAULT_PROMOTE_EVENTS))
+/** Classify a task text: clear keyword evidence picks spec/react; ambiguous
+ *  or unmatched text returns 'weak' (the model decides per task). */
+export function classifyTask(text) {
+  const react = countHits(REACT_RE, text)
+  const spec = countHits(SPEC_RE, text)
+  if (react > spec) return 'react'
+  if (spec > react) return 'spec'
+  return 'weak'
+}
 
+/** Unwrap the text of a durable user/message event (defensive shapes). */
+export function extractText(data) {
+  if (!data) return ''
+  const payload = data && typeof data.message === 'object' && data.message !== null ? data.message : data
+  const content = Array.isArray(payload.content) ? payload.content : []
+  return content.map((c) => (typeof c === 'string' ? c : (c && c.text) || '')).join(' ')
+}
+
+/** Per-session mode derived from durable events (resume-safe). */
+export function sessionMode(session) {
+  if (!session || !Array.isArray(session.events)) return 'weak'
+  const userMsg = session.events.find((event) => event && event.type === 'user/message')
+  return classifyTask(extractText(userMsg && userMsg.data))
+}
+
+/* ── personas ────────────────────────────────────────────────────────────── */
+
+const PERSONA_SPEC = 'You are a helpful software engineer assistant.'
+
+const PERSONA_REACT =
+  'You are a hands-on software engineer who delivers working output fast.\n'
+  + 'Work directly: write or edit code, then verify it by reading and running. '
+  + 'Keep the loop tight — produce, verify, fix — and do not build test '
+  + 'harnesses, scaffolding, or ceremony the user did not ask for. '
+  + 'Finish with a usable deliverable and a short summary.'
+
+/** Pro optimum (router-standard P11/P24): spec sentence + classify
+ *  instruction, NO anchors. */
+const PERSONA_WEAK_PRO =
+  'You are a helpful software engineer assistant.\n'
+  + 'Before acting, decide the task type (build or fix) and adopt the matching '
+  + 'style: build → hands-on production; fix → inspect-and-plan.'
+
+/** Flash optimum (router-standard P11/P23): neutral + classify + anchors. */
+const PERSONA_WEAK_FLASH =
+  'You are a helpful assistant.\n'
+  + 'Before acting, decide the task type (build or fix) and adopt the matching '
+  + 'style: build → hands-on production; fix → inspect-and-plan.\n'
+  + 'Before acting, briefly review what you have already done in this session '
+  + 'and continue from where you left off; do not repeat completed steps. '
+  + 'Do not run environment checks (echo, whoami, uname, node --version, date) '
+  + 'or exhaustive grep/glob scans.'
+
+function isFlashModel(modelId) {
+  return typeof modelId === 'string' && /flash/i.test(modelId)
+}
+
+/** Persona for a mode; weak picks the model-specific internal-routing text. */
+export function personaFor(mode, modelId) {
+  if (mode === 'react') return PERSONA_REACT
+  if (mode === 'spec') return PERSONA_SPEC
+  return isFlashModel(modelId) ? PERSONA_WEAK_FLASH : PERSONA_WEAK_PRO
+}
+
+/* ── first-turn core tools (shell added dynamically) ─────────────────────── */
+
+/** Bootstrap catalogs per mode. `glob`/`grep` are deliberately absent
+ *  (xiaobright boundary probes); edit/write are anchor-safe. */
+export function coreFor(mode, shell) {
+  const common = [shell, 'read']
+  if (mode === 'spec') return [...common, 'edit']
+  if (mode === 'react') return [...common, 'write']
+  return common // weak: conservative minimal anchor
+}
+
+/* ── prompt-section helpers ──────────────────────────────────────────────── */
+
+/** Replace only the persona section, keeping everything else (plan-mode
+ *  above all, which returns after promotion). */
+export function applyPersona(sections, personaText) {
+  const rest = (sections || []).filter(
+    (section) => !section || (section.name !== 'persona' && !/persona/i.test(section.name)),
+  )
+  return [{ name: 'anchored-persona', text: personaText, order: 0 }, ...rest]
+}
+
+/* ── plugin ──────────────────────────────────────────────────────────────── */
+
+export function apply(ctx, config = {}) {
   /** Sessions already promoted in this process. Promotion is append-only. */
   const promoted = new Set()
+  /** Per-session resolved mode (append-only across the process lifetime). */
+  const modes = new Map()
   let warned = false
   const warnOnce = (message) => {
     if (warned) return
@@ -59,34 +148,19 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  /** Whether the session has reached the promoted phase. */
-  const isPromoted = (session) => {
-    if (session === undefined) return true
-    if (promoted.has(session.id)) return true
-    if (!Array.isArray(session.events)) return true
-    const hit = session.events.some((event) => event && promoteEvents.has(event.type))
-    if (hit) promoted.add(session.id)
-    return hit
+  const resolveMode = (session) => {
+    if (modes.has(session.id)) return modes.get(session.id)
+    const mode = sessionMode(session)
+    modes.set(session.id, mode)
+    return mode
   }
 
-  /** Narrow the assembled catalog to one platform shell plus the common tools. */
-  const applyBootstrap = (assembled) => {
-    if (!assembled || !Array.isArray(assembled.tools)) return assembled
-    const available = new Set(assembled.tools.map((tool) => tool && tool.name))
-    const shell = shellTools.find((toolName) => available.has(toolName))
-    const keep = []
-    if (shell !== undefined) keep.push(shell)
-    for (const toolName of commonTools) {
-      if (available.has(toolName)) keep.push(toolName)
-    }
-    if (keep.length === 0) {
-      warnOnce(`${name}: no bootstrap tool found among ${shellTools.join(',')} + ${commonTools.join(',')} — full catalog exposed`)
-      return assembled
-    }
-    return {
-      ...assembled,
-      tools: assembled.tools.filter((tool) => tool && keep.includes(tool.name)),
-    }
+  const isPromoted = (session) => {
+    if (promoted.has(session.id)) return true
+    if (!Array.isArray(session.events)) return true
+    const hit = session.events.some((event) => event && event.type === 'tool/call')
+    if (hit) promoted.add(session.id)
+    return hit
   }
 
   ctx.on('system-prompt/assemble', async (assembly, context, next) => {
@@ -94,9 +168,40 @@ export function apply(ctx, config = {}) {
     const assembled = await next()
     try {
       const agent = context && context.agent
-      const session = agent ? agent.session : context && context.session
-      if (isPromoted(session)) return assembled
-      return applyBootstrap(assembled)
+      const session = agent ? agent.session : undefined
+      if (session === undefined) return assembled
+      const mode = resolveMode(session)
+      const modelId = (agent.options && agent.options.model) || ''
+      const persona = personaFor(mode, modelId)
+
+      if (isPromoted(session)) {
+        // Promoted: full catalog; persona stays; contexts cleared; the other
+        // sections (plan-mode etc.) come back for the rest of the session.
+        return {
+          ...assembled,
+          sections: applyPersona(assembled.sections, persona),
+          contexts: [],
+        }
+      }
+
+      const tools = Array.isArray(assembled.tools) ? assembled.tools : []
+      const available = new Set(tools.map((tool) => tool && tool.name))
+      const shell = available.has('bash') ? 'bash' : available.has('pwsh') ? 'pwsh' : undefined
+      if (shell === undefined) {
+        warnOnce(`${name}: no platform shell in the catalog — full catalog exposed`)
+        return assembled
+      }
+      const core = new Set(coreFor(mode, shell))
+
+      // First request: the cleanest possible opening (persona is the only
+      // section, contexts cleared — equivalent to a complete persona) plus
+      // the task-matched bootstrap catalog.
+      return {
+        ...assembled,
+        sections: [{ name: 'anchored-persona', text: persona, order: 0 }],
+        contexts: [],
+        tools: tools.filter((tool) => tool && core.has(tool.name)),
+      }
     } catch (error) {
       // A filter bug must never brick a session: degrade to the full catalog.
       warnOnce(`${name}: bootstrap filter failed, exposing the full catalog: ${String((error && error.message) || error)}`)
