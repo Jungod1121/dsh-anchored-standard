@@ -167,8 +167,25 @@ export function apply(ctx, config = {}) {
     return content.map((c) => (typeof c === 'string' ? c : (c && c.text) || '')).join(' ')
   }
 
-  /** Capture the first real user message of each session BEFORE the first
-   *  assembly runs (pre-step precedes prompt assembly in the step pipeline). */
+  /** Capture the first real user message of each session from the EARLIEST
+   *  durable point — agent/inbox/inserted — which fires when the message
+   *  enters the inbox, strictly before any prompt assembly. (Measured on
+   *  rc.6: the FIRST assembly of a fresh session runs BEFORE agent/pre-step,
+   *  so pre-step is too late for the first request.) */
+  ctx.on('agent/inbox/inserted', ({ agent, message }) => {
+    try {
+      const session = agent && agent.session
+      if (!session || firstTexts.has(session.id)) return
+      if (!message || !message.source || message.source.kind !== 'user') return
+      const text = messageText(message)
+      dbg('inbox/inserted captured text=' + JSON.stringify(text.slice(0, 80)))
+      if (text.trim()) firstTexts.set(session.id, text)
+    } catch {
+      // Observation only.
+    }
+  })
+
+  /** Fallback capture point for sessions that never saw inbox/inserted. */
   ctx.on('agent/pre-step', async (payload, next) => {
     const decision = await next()
     try {

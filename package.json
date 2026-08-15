@@ -1,6 +1,6 @@
 {
   "name": "dsh-anchored-standard",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Task-aware two-phase DeepSeek Harness preset: spec/react/weak first-request anchors (bash+read±edit/write), then the full Standard tool catalog after the first tool call.",
   "type": "module",
   "main": "index.js",
