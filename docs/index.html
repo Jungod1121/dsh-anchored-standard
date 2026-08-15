@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>dsh-anchored-standard — Anchor the first request. Unlock the full stack.</title>
-<meta name="description" content="Two-phase DeepSeek Harness preset: Minimal-aligned bootstrap (bash+read), then the full Standard tool catalog after the first tool call or reply. 98/99 in the Project2 reference eval.">
-<meta property="og:title" content="dsh-anchored-standard — 锚定首轮请求，解锁全部工具">
-<meta property="og:description" content="两阶段 DSH 预设：Minimal 开局 + 完整 Standard 工具。社区参考评测 98/99。">
+<meta name="description" content="Task-aware two-phase DeepSeek Harness preset: spec/react/weak first-request anchors, then the full Standard tool catalog after the first tool call. 98/99 in the Project2 reference eval.">
+<meta property="og:title" content="dsh-anchored-standard — 先开极简模式开局，再解锁全部工具">
+<meta property="og:description" content="任务感知两阶段 DSH 预设：修复/构建/模糊三类首轮锚定 + 完整 Standard 工具。社区参考评测 98/99。">
 <style>
   :root {
     --ink: #0B1322;
@@ -17,34 +17,76 @@
     --text: #ffffff;
     --dim: rgba(255,255,255,0.8);
     --dim2: rgba(255,255,255,0.5);
-    --ease: cubic-bezier(0.16,1,0.3,1);
-    --radius: 24px;
     --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
+  html {
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+  }
   body {
-    /* 深墨夜景 + 三个柔和光源（月光 / 深蓝 / 香槟点缀） */
+    /* 深墨夜景 + 月光/深蓝/香槟三光源（贯穿全页，玻璃每屏借到不同的光） */
     background:
-      radial-gradient(720px circle at 88% 4%, rgba(124,156,196,0.22) 0%, transparent 60%),
-      radial-gradient(640px circle at -6% 96%, rgba(51,81,122,0.30) 0%, transparent 60%),
-      radial-gradient(560px circle at 58% 46%, rgba(228,184,99,0.09) 0%, transparent 62%),
+      radial-gradient(720px circle at 88% 4%, rgba(124,156,196,0.20) 0%, transparent 60%),
+      radial-gradient(640px circle at -6% 96%, rgba(51,81,122,0.28) 0%, transparent 60%),
+      radial-gradient(560px circle at 58% 46%, rgba(228,184,99,0.08) 0%, transparent 62%),
       var(--ink);
     background-attachment: fixed;
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-    line-height: 1.65;
+    line-height: 1.6;
   }
-  /* 2.5% 噪点颗粒（SVG feTurbulence） */
+  /* 2.5% 噪点颗粒 */
   body::after {
     content: ""; position: fixed; inset: 0; z-index: 90; pointer-events: none; opacity: .028;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   }
   a { color: var(--text); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
   .gold { color: var(--champagne); }
   .gold-b { color: var(--champagne-b); }
+  .dim2 { color: var(--dim2); }
+
+  /* ── 全屏滚动骨架 ─────────────────────────────────────────────── */
+  .screen {
+    position: relative;
+    min-height: 100svh;
+    scroll-snap-align: start;
+    display: flex; align-items: center; justify-content: center;
+    padding: 96px 24px 64px;
+    overflow: hidden;
+  }
+  /* 每屏自己的光源（错落位置 → 场景切换感） */
+  .screen::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+  }
+  .s2::before { background: radial-gradient(560px circle at 90% 12%, rgba(124,156,196,0.20) 0%, transparent 60%); }
+  .s3::before { background: radial-gradient(600px circle at 8% 90%, rgba(51,81,122,0.26) 0%, transparent 62%); }
+  .s4::before { background: radial-gradient(520px circle at 84% 84%, rgba(228,184,99,0.10) 0%, transparent 60%); }
+  .s5::before { background: radial-gradient(620px circle at 10% 8%, rgba(124,156,196,0.18) 0%, transparent 60%); }
+  .s6::before { background: radial-gradient(540px circle at 90% 50%, rgba(51,81,122,0.24) 0%, transparent 62%); }
+  .s7::before { background: radial-gradient(560px circle at 50% 96%, rgba(228,184,99,0.09) 0%, transparent 62%); }
+  .inner {
+    position: relative; z-index: 2;
+    width: 100%; max-width: 1040px;
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center;
+  }
+  .kicker { font-size: 15px; color: var(--champagne); font-weight: 600; margin-bottom: 12px; }
+  h2 { font-size: clamp(26px, 3.6vw, 40px); font-weight: 700; letter-spacing: -.5px; margin-bottom: 10px; }
+  .lead { color: var(--dim); font-size: 16px; max-width: 660px; }
+  .lead code { font-family: var(--mono); font-size: 13px; background: rgba(255,255,255,0.1); padding: 1px 7px; border-radius: 6px; color: rgba(255,255,255,0.9); }
+  .foot { font-size: 13px; color: var(--dim); margin-top: 14px; max-width: 760px; }
+
+  /* 入场动画：错落延迟（每屏内 .d1..d4） */
+  .rise { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s ease; }
+  .in-view .rise { opacity: 1; transform: none; }
+  .in-view .d1 { transition-delay: .05s; }
+  .in-view .d2 { transition-delay: .14s; }
+  .in-view .d3 { transition-delay: .23s; }
+  .in-view .d4 { transition-delay: .32s; }
+
+  /* ── 夜航玻璃材质 ─────────────────────────────────────────────── */
   .glass {
     position: relative;
     background:
@@ -53,136 +95,129 @@
     backdrop-filter: blur(60px) saturate(180%);
     -webkit-backdrop-filter: blur(60px) saturate(180%);
     border: 1px solid rgba(255,255,255,0.15);
-    border-radius: var(--radius);
-    box-shadow:
-      0 16px 40px rgba(3,7,18,0.5),
-      inset 0 1px 0 rgba(255,255,255,0.22),
-      inset 0 -1px 0 rgba(2,6,16,0.35);
+    border-radius: 24px;
+    /* 无外投影（全屏滚动规则）；玻璃的"光有方向"靠 inset 顶光/底影 */
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(2,6,16,0.35);
     overflow: hidden;
+    transition: opacity .3s ease, border-color .3s ease, background .3s ease;
   }
+  .glass:hover { opacity: .92; border-color: rgba(255,255,255,0.28); }
 
-  /* nav */
+  /* ── 顶部导航（玻璃条） ───────────────────────────────────────── */
   nav {
-    position: sticky; top: 0; z-index: 50;
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 24px; max-width: 980px; margin: 0 auto;
+    padding: 12px 24px; max-width: 1040px; margin: 0 auto;
     background:
       linear-gradient(to bottom, rgba(255,255,255,0.08), transparent 55%),
       rgba(255,255,255,0.06);
     backdrop-filter: blur(60px) saturate(180%);
     -webkit-backdrop-filter: blur(60px) saturate(180%);
     border: 1px solid rgba(255,255,255,0.12);
-    border-top: 0;
-    border-radius: 0 0 24px 24px;
-    box-shadow: 0 12px 36px rgba(3,7,18,0.45), inset 0 -1px 0 rgba(2,6,16,0.3);
+    border-top: 0; border-radius: 0 0 20px 20px;
+    box-shadow: inset 0 -1px 0 rgba(2,6,16,0.3);
   }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
   .brand .dot {
     width: 10px; height: 10px; border-radius: 3px;
     background: rgba(255,255,255,0.16);
     border: 1px solid rgba(255,255,255,0.35);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 8px rgba(3,7,18,0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
   }
   .nav-right { display: flex; align-items: center; gap: 14px; }
   .lang-switch { display: flex; border: 1px solid rgba(255,255,255,0.18); border-radius: 999px; overflow: hidden; }
   .lang-switch button {
     background: transparent; border: 0; color: var(--dim); cursor: pointer;
-    padding: 4px 12px; font-size: 13px;
-    transition: all .5s var(--ease);
+    padding: 4px 12px; font-size: 13px; transition: all .3s ease;
   }
   .lang-switch button.on { background: rgba(255,255,255,0.12); color: var(--text); font-weight: 600; }
   .gh-link { color: var(--dim); font-size: 13px; }
   .gh-link:hover { color: var(--text); }
 
-  /* hero */
-  .hero { text-align: center; padding: 76px 24px 46px; }
+  /* ── 右侧导航点 + 滚动指示 ───────────────────────────────────── */
+  .dots {
+    position: fixed; right: 22px; top: 50%; transform: translateY(-50%); z-index: 60;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .dots button {
+    width: 10px; height: 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.35);
+    background: transparent; cursor: pointer; padding: 0;
+    transition: all .3s ease;
+  }
+  .dots button.on { background: var(--champagne); border-color: var(--champagne); }
+  .dots button:hover { border-color: rgba(255,255,255,0.8); }
+  .scroll-hint {
+    position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    color: var(--dim2); font-size: 12px;
+  }
+  .scroll-hint .arrow {
+    width: 18px; height: 18px; border-right: 1px solid rgba(255,255,255,0.55);
+    border-bottom: 1px solid rgba(255,255,255,0.55);
+    transform: rotate(45deg);
+    animation: drop 1.8s ease-in-out infinite;
+  }
+  @keyframes drop { 0%, 100% { opacity: .2; translate: 0 -4px; } 50% { opacity: .9; translate: 0 4px; } }
+
+  /* ── Hero ─────────────────────────────────────────────────────── */
   .hero .tag {
     display: inline-block; border: 1px solid rgba(255,255,255,0.18); border-radius: 999px;
-    padding: 6px 16px; font-size: 12.5px; color: var(--dim); font-weight: 600;
+    padding: 6px 18px; font-size: 13px; color: var(--dim); font-weight: 600;
     background: rgba(255,255,255,0.08);
     backdrop-filter: blur(40px) saturate(180%);
     -webkit-backdrop-filter: blur(40px) saturate(180%);
-    box-shadow: 0 4px 16px rgba(3,7,18,0.45), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(2,6,16,0.3);
-    margin-bottom: 24px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(2,6,16,0.3);
+    margin-bottom: 26px;
   }
-  .hero h1 {
-    font-size: clamp(30px, 5.6vw, 52px); line-height: 1.18; font-weight: 700;
-    letter-spacing: -.5px;
-  }
-  .hero p.sub { margin: 18px auto 0; max-width: 620px; color: var(--dim); font-size: 16.5px; }
-  .hero .cta { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .hero h1 { font-size: clamp(32px, 6vw, 62px); line-height: 1.15; font-weight: 700; letter-spacing: -1px; }
+  .hero p.sub { margin: 20px auto 0; max-width: 640px; color: var(--dim); font-size: 17px; }
+  .hero .cta { margin-top: 30px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
   .btn {
-    display: inline-block; padding: 11px 22px; border-radius: 16px; font-size: 15px;
+    display: inline-block; padding: 13px 26px; border-radius: 999px; font-size: 16px;
     font-weight: 600; border: 1px solid rgba(255,255,255,0.2); color: var(--text);
     background: rgba(255,255,255,0.10);
     backdrop-filter: blur(40px) saturate(180%);
     -webkit-backdrop-filter: blur(40px) saturate(180%);
-    box-shadow: 0 4px 16px rgba(3,7,18,0.45), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(2,6,16,0.3);
-    transition: all .5s var(--ease);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(2,6,16,0.3);
+    transition: opacity .3s ease, border-color .3s ease, transform .2s ease;
   }
-  .btn:hover {
-    text-decoration: none;
-    background: rgba(255,255,255,0.15);
-    border-color: rgba(255,255,255,0.35);
-    box-shadow: 0 10px 32px rgba(3,7,18,0.55), inset 0 1px 0 rgba(255,255,255,0.35);
-    transform: translateY(-2px);
-  }
-  .btn:active { transform: scale(0.97); }
+  .btn:hover { text-decoration: none; opacity: .92; border-color: rgba(255,255,255,0.4); }
+  .btn:active { transform: scale(.95); }
   .btn.primary {
     background: rgba(228,184,99,0.15);
     border-color: rgba(228,184,99,0.4);
     color: var(--champagne-b);
   }
   .btn.primary:hover { background: rgba(228,184,99,0.22); border-color: rgba(228,184,99,0.6); }
-
-  .install {
-    margin: 34px auto 0; max-width: 660px; text-align: left;
+  .install-bar {
+    margin: 30px auto 0; width: 100%; max-width: 640px; text-align: left;
     background:
       linear-gradient(to bottom, rgba(255,255,255,0.06), transparent 50%),
       rgba(6,10,19,0.82);
-    border: 1px solid rgba(255,255,255,0.18); border-radius: var(--radius);
-    padding: 14px 16px; display: flex; align-items: center; gap: 12px;
-    box-shadow: 0 12px 36px rgba(3,7,18,0.5), inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(2,6,16,0.35);
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 18px;
+    padding: 13px 16px; display: flex; align-items: center; gap: 12px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(2,6,16,0.35);
   }
-  .install code {
+  .install-bar code {
     flex: 1; font-family: var(--mono); font-size: 13.5px; color: rgba(255,255,255,0.88);
     overflow-x: auto; white-space: nowrap; scrollbar-width: none;
   }
-  .install code::-webkit-scrollbar { display: none; }
-  .install .copy {
+  .install-bar code::-webkit-scrollbar { display: none; }
+  .install-bar .copy {
     background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: var(--dim);
     border-radius: 10px; padding: 6px 14px; font-size: 13px; cursor: pointer;
-    transition: all .5s var(--ease);
+    transition: all .3s ease;
   }
-  .install .copy:hover { background: rgba(255,255,255,0.14); color: var(--text); }
+  .install-bar .copy:hover { background: rgba(255,255,255,0.14); color: var(--text); }
 
-  /* sections */
-  section { padding: 46px 0; }
-  .kicker {
-    font-size: 13.5px; color: var(--champagne); font-weight: 600; margin-bottom: 10px;
-  }
-  h2 { font-size: clamp(22px, 3.4vw, 30px); margin-bottom: 12px; letter-spacing: -.3px; font-weight: 700; }
-  .lead { color: var(--dim); max-width: 700px; }
-  .lead code { font-family: var(--mono); font-size: 13px; background: rgba(255,255,255,0.1); padding: 1px 7px; border-radius: 6px; }
-
-  /* score cards */
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 26px; }
-  .card { padding: 22px; transition: all .5s var(--ease); }
-  .card:hover {
-    background:
-      linear-gradient(to bottom, rgba(255,255,255,0.13), transparent 50%),
-      rgba(255,255,255,0.1);
-    border-color: rgba(255,255,255,0.24);
-    box-shadow:
-      0 20px 60px rgba(3,7,18,0.65), 0 0 0 1px rgba(255,255,255,0.12),
-      inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -1px 0 rgba(2,6,16,0.35);
-    transform: translateY(-2px);
-  }
+  /* ── 评分卡 ───────────────────────────────────────────────────── */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; width: 100%; }
+  .card { padding: 24px 22px; text-align: left; }
   .card .name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
   .card .desc { color: var(--dim); font-size: 13px; min-height: 40px; }
-  .card .score { font-size: 40px; font-weight: 700; letter-spacing: -1px; margin: 14px 0 2px; }
-  .card .score small { font-size: 15px; color: var(--dim2); font-weight: 600; }
-  .card .bar { height: 6px; border-radius: 4px; margin-top: 12px; background: rgba(255,255,255,0.1); overflow: hidden; }
+  .card .score { font-size: 38px; font-weight: 700; letter-spacing: -1px; margin: 12px 0 2px; }
+  .card .score small { font-size: 14px; color: var(--dim2); font-weight: 600; }
+  .card .bar { height: 5px; border-radius: 4px; margin-top: 10px; background: rgba(255,255,255,0.1); overflow: hidden; }
   .card .bar i { display: block; height: 100%; border-radius: 4px; background: rgba(255,255,255,0.75); }
   .card.hot { border-color: rgba(228,184,99,0.35);
     background:
@@ -195,21 +230,21 @@
     color: var(--champagne-b); font-size: 11px; font-weight: 700;
     padding: 3px 14px; border-radius: 999px;
   }
-  .tools-note { margin-top: 16px; font-size: 13px; color: var(--dim); }
-  .tools-note code { font-family: var(--mono); font-size: 12.5px; color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.1); padding: 1px 6px; border-radius: 5px; }
   .win { color: var(--champagne-b); }
   .lose { color: var(--dim2); }
+  .tools-note { margin-top: 14px; font-size: 13px; color: var(--dim); }
+  .tools-note code { font-family: var(--mono); font-size: 12.5px; color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.1); padding: 1px 6px; border-radius: 5px; }
 
-  /* mechanism */
-  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 14px; align-items: stretch; margin-top: 28px; }
-  .step { padding: 20px; }
+  /* ── 机制三步 ─────────────────────────────────────────────────── */
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 14px; align-items: stretch; margin-top: 28px; width: 100%; }
+  .step { padding: 22px 20px; text-align: left; }
   .step .no {
-    width: 26px; height: 26px; border-radius: 8px; background: rgba(255,255,255,0.1);
+    width: 28px; height: 28px; border-radius: 999px; background: rgba(255,255,255,0.1);
     border: 1px solid rgba(255,255,255,0.2);
-    color: var(--champagne-b); font-weight: 700; font-size: 13px;
+    color: var(--champagne-b); font-weight: 700; font-size: 14px;
     display: flex; align-items: center; justify-content: center; margin-bottom: 12px;
   }
-  .step h3 { font-size: 15px; margin-bottom: 8px; }
+  .step h3 { font-size: 16px; margin-bottom: 8px; }
   .step p { color: var(--dim); font-size: 13.5px; }
   .step pre {
     margin-top: 12px; font-family: var(--mono); font-size: 12px; color: rgba(255,255,255,0.88);
@@ -220,24 +255,20 @@
     padding: 10px 12px; overflow-x: auto;
   }
   .step pre .h { color: var(--dim2); }
-  .arrow { display: flex; align-items: center; color: var(--dim); font-size: 20px; }
-  @media (max-width: 860px) {
-    .flow { grid-template-columns: 1fr; }
-    .arrow { transform: rotate(90deg); justify-content: center; padding: 2px 0; }
-  }
+  .arrow { display: flex; align-items: center; color: var(--dim); font-size: 22px; }
 
-  /* wire evidence */
+  /* ── Wire 终端 ────────────────────────────────────────────────── */
   .wire {
-    margin-top: 26px;
+    margin-top: 28px; width: 100%; max-width: 820px; text-align: left;
     background:
       linear-gradient(to bottom, rgba(255,255,255,0.05), transparent 50%),
       rgba(6,10,19,0.82);
     border: 1px solid rgba(255,255,255,0.18);
-    border-radius: var(--radius); padding: 20px 22px; font-family: var(--mono); font-size: 13px;
-    box-shadow: 0 12px 36px rgba(3,7,18,0.5), inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(2,6,16,0.35);
+    border-radius: 24px; padding: 22px 26px; font-family: var(--mono); font-size: 13px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(2,6,16,0.35);
   }
   .wire .line { display: flex; gap: 14px; padding: 7px 0; align-items: baseline; }
-  .wire .seq { color: var(--dim2); min-width: 78px; }
+  .wire .seq { color: var(--dim2); min-width: 76px; }
   .wire .tag {
     border-radius: 6px; padding: 1px 9px; font-size: 12px; font-weight: 700; min-width: 76px; text-align: center;
   }
@@ -245,35 +276,86 @@
   .wire .tag.full { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.22); }
   .wire .txt { color: rgba(255,255,255,0.85); }
 
-  /* compare table */
-  .table-scroll { overflow-x: auto; margin-top: 26px; border-radius: var(--radius); }
+  /* ── 安装三步 ─────────────────────────────────────────────────── */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; width: 100%; }
+  .steprow { padding: 22px; text-align: left; }
+  .steprow .no {
+    width: 34px; height: 34px; border-radius: 999px;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    color: var(--champagne-b); font-weight: 700; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 12px;
+  }
+  .steprow h3 { font-size: 16px; margin-bottom: 6px; }
+  .steprow p { color: var(--dim); font-size: 13.5px; }
+  .steprow p code { font-family: var(--mono); font-size: 12.5px; color: rgba(255,255,255,0.9); }
+
+  /* ── 对比表 ───────────────────────────────────────────────────── */
+  .table-scroll { width: 100%; max-width: 860px; margin-top: 26px; border-radius: 24px; }
   table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
-  th, td { text-align: left; padding: 12px 18px; border-bottom: 1px solid rgba(255,255,255,0.12); color: var(--text); }
+  th, td { text-align: left; padding: 13px 18px; border-bottom: 1px solid rgba(255,255,255,0.12); color: var(--text); }
   th { color: var(--dim2); font-weight: 600; font-size: 13px; }
   tr:last-child td { border-bottom: 0; }
   td.n { font-variant-numeric: tabular-nums; font-weight: 700; }
   td.ok { color: var(--champagne-b); font-weight: 700; }
   td.bad { color: var(--dim2); }
-  .foot { font-size: 12.5px; color: var(--dim); margin-top: 12px; }
 
-  /* faq */
-  details { margin-top: 12px; padding: 16px 20px; transition: all .5s var(--ease); }
-  details:hover { border-color: rgba(255,255,255,0.24); }
+  /* ── FAQ ──────────────────────────────────────────────────────── */
+  .faqs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 26px; width: 100%; text-align: left; }
+  details { padding: 18px 20px; }
   details summary { cursor: pointer; font-weight: 600; font-size: 15px; list-style: none; color: var(--text); }
   details summary::after { content: "＋"; float: right; color: var(--dim); }
   details[open] summary::after { content: "－"; }
-  details p { margin-top: 10px; color: var(--dim); font-size: 14px; }
-  details p code { font-family: var(--mono); font-size: 13px; background: rgba(255,255,255,0.1); padding: 1px 7px; border-radius: 6px; color: rgba(255,255,255,0.9); }
+  details p { margin-top: 10px; color: var(--dim); font-size: 13.5px; }
+  details p code { font-family: var(--mono); font-size: 12.5px; background: rgba(255,255,255,0.1); padding: 1px 7px; border-radius: 6px; color: rgba(255,255,255,0.9); }
+  .footer-links { margin-top: 26px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; color: var(--dim); font-size: 13px; }
+  .footer-links a { font-weight: 600; }
 
-  footer {
-    margin-top: 60px; padding: 30px 24px 52px;
-    color: var(--dim); font-size: 13px; text-align: center;
+  /* ── 响应式与降级 ─────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    html { scroll-snap-type: y proximity; }
+    .screen { padding: 84px 16px 40px; }
+    .cards, .steps { grid-template-columns: 1fr; }
+    .flow { grid-template-columns: 1fr; }
+    .arrow { transform: rotate(90deg); justify-content: center; padding: 2px 0; }
+    .faqs { grid-template-columns: 1fr; }
+    .card .desc { min-height: 0; }
+    .dots { display: none; }
+    /* 移动端压缩：隐藏次要素材，保证每屏尽量一屏放下 */
+    .tools-note { display: none; }
+    .step pre { display: none; }
+    .steps { display: none; }
+    .mob-note { display: block !important; }
+    .card { padding: 13px 16px; }
+    .step { padding: 13px 16px; }
+    .steprow { padding: 16px; }
+    .card .score { font-size: 28px; margin-top: 6px; }
+    .card .desc { font-size: 11.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .step p { font-size: 11.5px; line-height: 1.45; }
+    .arrow { display: none; }
+    .card .name { font-size: 14px; }
+    .step h3 { font-size: 14px; margin-bottom: 4px; }
+    .card .bar { margin-top: 6px; }
+    .cards { gap: 10px; margin-top: 18px; }
+    .flow { gap: 10px; margin-top: 18px; }
+    .steps { gap: 10px; margin-top: 18px; }
+    .faqs { gap: 10px; margin-top: 14px; }
+    .flow { gap: 8px; margin-top: 14px; }
+    .cards { gap: 8px; margin-top: 14px; }
+    .wire { margin-top: 18px; padding: 16px; font-size: 11px; }
+    .table-scroll { margin-top: 18px; }
+    h2 { margin-bottom: 6px; }
+    .lead, .foot { font-size: 13.5px; }
+    .hero p.sub { font-size: 14.5px; margin-top: 14px; }
+    .install-bar { margin-top: 18px; }
+    .install-bar code { font-size: 11px; }
+    .hero .cta { margin-top: 18px; }
+    .btn { padding: 11px 20px; font-size: 14px; }
   }
-  footer .links { margin-bottom: 10px; display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
-  footer .links a { color: var(--text); font-weight: 600; }
-  .fade-in { animation: fade .6s ease both; }
-  @keyframes fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-  [lang-block] { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; scroll-snap-type: none; }
+    .rise { opacity: 1; transform: none; transition: none; }
+    .scroll-hint .arrow { animation: none; }
+  }
 </style>
 </head>
 <body>
@@ -289,141 +371,149 @@
   </div>
 </nav>
 
-<div class="hero">
-  <div class="tag" lang-block="zh">🔥 全网都在传的 V4 Pro 玩法 · 社区预设</div>
-  <div class="tag" lang-block="en">🔥 The V4 Pro trick everyone is talking about · community preset</div>
+<div class="dots" id="dots"></div>
 
-  <h1>
-    <span lang-block="zh">先开<span class="gold-b">极简模式</span>开局，<br><span class="gold-b">再解锁全部工具</span></span>
-    <span lang-block="en">Anchor the first request, <span class="gold-b">unlock the full stack</span></span>
-  </h1>
+<!-- 屏 1 · Hero -->
+<section class="screen s1 hero">
+  <div class="inner">
+    <div class="tag rise d1" lang-block="zh">🔥 全网都在传的 V4 Pro 玩法 · 任务感知锚定预设</div>
+    <div class="tag rise d1" lang-block="en">🔥 The V4 Pro trick everyone is talking about · task-aware anchor preset</div>
 
-  <p class="sub" lang-block="zh">
-    DeepSeek V4 Pro 的能力上限藏在第一次 API 请求里。这个预设用极简开局
-    （一句话 prompt + bash/read 两个工具）把模型锚进最强推理轨迹，首个工具调用
-    或回复后自动展开 Standard 全部 25 个工具——完整能力，一分不丢。
-  </p>
-  <p class="sub" lang-block="en">
-    DeepSeek V4 Pro's ability ceiling hides inside the first API request. This
-    preset anchors the model into its strongest reasoning trajectory with a
-    Minimal-aligned bootstrap (one-line prompt + bash/read), then exposes all
-    25 Standard tools after the first tool call or reply — full capability,
-    nothing lost.
-  </p>
+    <h1 class="rise d2">
+      <span lang-block="zh">先开<span class="gold-b">极简模式</span>开局，<br>再解锁全部工具</span>
+      <span lang-block="en">Anchor the first request,<br><span class="gold-b">unlock the full stack</span></span>
+    </h1>
 
-  <div class="cta">
-    <a class="btn primary" href="#install" lang-block="zh">立即安装</a>
-    <a class="btn primary" href="#install" lang-block="en">Install now</a>
-    <a class="btn" href="https://github.com/Jungod1121/dsh-anchored-standard" target="_blank" rel="noopener">GitHub ↗</a>
+    <p class="sub rise d3" lang-block="zh">
+      修复任务给极简开局，构建任务给实干开局，模糊任务让模型自己选——
+      首个工具调用后，25 个工具全部解锁。
+    </p>
+    <p class="sub rise d3" lang-block="en">
+      Fix tasks get the Minimal anchor, build tasks get the doer anchor,
+      ambiguous tasks self-pick — all 25 tools unlock after the first tool call.
+    </p>
+
+    <div class="install-bar rise d4">
+      <code id="install-cmd">dsh plugin --profile web add github:Jungod1121/dsh-anchored-standard</code>
+      <button class="copy" id="copy-btn" onclick="copyCmd()">复制 / Copy</button>
+    </div>
+
+    <div class="cta rise d4">
+      <a class="btn primary" href="https://github.com/Jungod1121/dsh-anchored-standard" target="_blank" rel="noopener">GitHub ↗</a>
+      <a class="btn" href="#screens" onclick="go(1);return false;" lang-block="zh">看数据 ↓</a>
+      <a class="btn" href="#screens" onclick="go(1);return false;" lang-block="en">See the numbers ↓</a>
+    </div>
   </div>
+  <div class="scroll-hint"><span lang-block="zh">向下滚动</span><span lang-block="en">Scroll</span><span class="arrow"></span></div>
+</section>
 
-  <div class="install" id="install-top">
-    <code id="install-cmd">dsh plugin --profile web add github:Jungod1121/dsh-anchored-standard</code>
-    <button class="copy" id="copy-btn" onclick="copyCmd()">复制 / Copy</button>
-  </div>
-</div>
-
-<div class="wrap">
-  <section class="fade-in">
-    <div class="kicker" lang-block="zh">参考评测 · Project2 V4.1b（max）</div>
-    <div class="kicker" lang-block="en">Reference eval · Project2 V4.1b (max)</div>
-    <h2 lang-block="zh">同一个模型，三种开局，两种命运</h2>
-    <h2 lang-block="en">Same model. Different opening. Different fate.</h2>
-    <p class="lead" lang-block="zh">社区评测 xiaobright/modeltest 在同一冻结题面上的实测（n 次独立运行）：</p>
-    <p class="lead" lang-block="en">Measured by the xiaobright/modeltest community evaluation on one frozen task:</p>
+<!-- 屏 2 · 评分 -->
+<section class="screen s2" id="screens">
+  <div class="inner">
+    <div class="kicker rise d1" lang-block="zh">参考评测 · Project2 V4.1b（max）</div>
+    <div class="kicker rise d1" lang-block="en">Reference eval · Project2 V4.1b (max)</div>
+    <h2 class="rise d1" lang-block="zh">同一个模型，三种开局，两种命运</h2>
+    <h2 class="rise d1" lang-block="en">Same model. Different opening. Different fate.</h2>
 
     <div class="cards">
-      <div class="card glass">
+      <div class="card glass rise d2">
         <div class="name">Standard</div>
-        <div class="desc" lang-block="zh">首轮 25 工具 + 长 prompt，全程 25 工具</div>
-        <div class="desc" lang-block="en">25 tools + long prompt from request #1, all the way</div>
+        <div class="desc" lang-block="zh">首轮 25 工具 + 长 prompt，开局就飘</div>
+        <div class="desc" lang-block="en">25 tools + long prompt from request #1</div>
         <div class="score lose">91–92<small> /100</small></div>
         <div class="bar"><i style="width:91.5%"></i></div>
-        <div class="tools-note" lang-block="zh">轨迹指纹：<code>let me</code> ×208，55 次过程回复——开局就飘了</div>
-        <div class="tools-note" lang-block="en">Trajectory fingerprint: <code>let me</code> ×208, 55 interim replies</div>
+        <div class="tools-note" lang-block="zh">轨迹指纹：<code>let me</code> ×208，55 次过程回复</div>
+        <div class="tools-note" lang-block="en">Trajectory: <code>let me</code> ×208, 55 interim replies</div>
       </div>
-      <div class="card glass">
+      <div class="card glass rise d2">
         <div class="name">Minimal</div>
-        <div class="desc" lang-block="zh">一句话 prompt + 2 工具——但全程只有 2 工具</div>
-        <div class="desc" lang-block="en">One-line prompt + 2 tools — but only 2 tools forever</div>
+        <div class="desc" lang-block="zh">2 工具开局轨迹稳——但全程只有 2 工具</div>
+        <div class="desc" lang-block="en">Stable 2-tool anchor — but only 2 tools forever</div>
         <div class="score">99 / 96<small> /100</small></div>
         <div class="bar"><i style="width:97.5%"></i></div>
-        <div class="tools-note" lang-block="zh">轨迹稳了，可 <code>glob/grep/subagent</code> 全没有，干不了完整开发</div>
-        <div class="tools-note" lang-block="en">Trajectory is stable, but no <code>glob/grep/subagent</code> — can't do full dev</div>
+        <div class="tools-note" lang-block="zh"><code>glob/grep/subagent</code> 全没有，干不了完整开发</div>
+        <div class="tools-note" lang-block="en">No <code>glob/grep/subagent</code> — can't do full dev</div>
       </div>
-      <div class="card glass hot">
+      <div class="card glass hot rise d3">
         <div class="ribbon" lang-block="zh">本预设</div>
         <div class="ribbon" lang-block="en">THIS ONE</div>
         <div class="name">Anchored Standard</div>
-        <div class="desc" lang-block="zh">首轮极简开局 → 信号后全部 25 工具</div>
-        <div class="desc" lang-block="en">Minimal bootstrap → all 25 tools after the signal</div>
+        <div class="desc" lang-block="zh">任务匹配开局 → 信号后全部 25 工具</div>
+        <div class="desc" lang-block="en">Task-matched anchor → all 25 tools after the signal</div>
         <div class="score win">98 / 99<small> /100</small></div>
         <div class="bar"><i style="width:98.5%"></i></div>
-        <div class="tools-note" lang-block="zh">两跑合计仅 1 个 <code>let me</code>，25 工具全程可用——脑子和手脚都要</div>
-        <div class="tools-note" lang-block="en">Only one <code>let me</code> across both runs, all 25 tools usable</div>
+        <div class="tools-note" lang-block="zh">两跑仅 1 个 <code>let me</code>——脑子和手脚都要</div>
+        <div class="tools-note" lang-block="en">One <code>let me</code> across both runs — brain and hands</div>
       </div>
     </div>
-  </section>
+    <p class="foot rise d4" lang-block="zh">数据：xiaobright/modeltest · 同一冻结题面</p>
+    <p class="foot rise d4" lang-block="en">Source: xiaobright/modeltest · one frozen task</p>
+  </div>
+</section>
 
-  <section class="fade-in">
-    <div class="kicker" lang-block="zh">工作机制</div>
-    <div class="kicker" lang-block="en">How it works</div>
-    <h2 lang-block="zh">三步，全自动</h2>
-    <h2 lang-block="en">Three steps, fully automatic</h2>
+<!-- 屏 3 · 机制 -->
+<section class="screen s3">
+  <div class="inner">
+    <div class="kicker rise d1" lang-block="zh">工作机制</div>
+    <div class="kicker rise d1" lang-block="en">How it works</div>
+    <h2 class="rise d1" lang-block="zh">三步，全自动</h2>
+    <h2 class="rise d1" lang-block="en">Three steps, fully automatic</h2>
 
     <div class="flow">
-      <div class="step glass">
+      <div class="step glass rise d2">
         <div class="no">1</div>
-        <h3 lang-block="zh">极简开局</h3>
-        <h3 lang-block="en">Minimal bootstrap</h3>
-        <p lang-block="zh">每个新会话的第一次模型请求：system prompt 固定为 Minimal 原句，工具目录只留 shell + read。</p>
-        <p lang-block="en">Request #1 of every session: the Minimal system prompt, and only shell + read on the tool surface.</p>
+        <h3 lang-block="zh">任务匹配开局</h3>
+        <h3 lang-block="en">Task-matched anchor</h3>
+        <p lang-block="zh">第一条消息分类：修复→极简句+读改；构建→实干句+读写；模糊→模型自选。</p>
+        <p lang-block="en">First message classified: fix→Minimal+edit, build→doer+write, ambiguous→self-pick.</p>
         <pre><span class="h">system:</span> You are a helpful software
 engineer assistant.
 
-<span class="h">tools:</span> [bash, read]</pre>
+<span class="h">tools:</span> [bash, read, edit]</pre>
       </div>
       <div class="arrow">→</div>
-      <div class="step glass">
+      <div class="step glass rise d3">
         <div class="no">2</div>
         <h3 lang-block="zh">轨迹锚定</h3>
         <h3 lang-block="en">Trajectory anchored</h3>
-        <p lang-block="zh">模型在训练对齐的"窄目录开局"上切出干净、聚焦的推理策略——这就是 98/99 的来源。</p>
-        <p lang-block="en">The model picks its clean, focused reasoning strategy on the RL-aligned narrow scaffold — that's where the score comes from.</p>
+        <p lang-block="zh">窄目录 + 唯一 persona + 清空上下文——最干净的开局切出最强策略。</p>
+        <p lang-block="en">Narrow catalog + single persona + cleared contexts — the cleanest opening.</p>
         <pre><span class="h">reasoning:</span> We need to ...
 <span class="h">strategy:</span> anchored ✓</pre>
       </div>
       <div class="arrow">→</div>
-      <div class="step glass">
+      <div class="step glass rise d4">
         <div class="no">3</div>
         <h3 lang-block="zh">全量展开</h3>
         <h3 lang-block="en">Full unlock</h3>
-        <p lang-block="zh">首个工具调用或首次回复（先到者为准）落地后，同一会话从请求 #2 起暴露全部 25 个 Standard 工具。</p>
-        <p lang-block="en">After the first tool call or reply (whichever comes first), request #2 and beyond expose all 25 Standard tools in the same session.</p>
+        <p lang-block="zh">首个工具调用后：25 工具全开，plan-mode 恢复，零事后干预。</p>
+        <p lang-block="en">After the first tool call: all 25 tools, plan-mode back, zero post-anchor injection.</p>
         <pre><span class="h">tools:</span> [ask_user_question, bash, edit,
 glob, grep, subagent, web_search,
 workflow, write, ...] <span class="h">×25</span></pre>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section class="fade-in">
-    <div class="kicker" lang-block="zh">Wire 层硬证据</div>
-    <div class="kicker" lang-block="en">Wire-level evidence</div>
-    <h2 lang-block="zh">不是玄学：请求头里的两次工具目录快照</h2>
-    <h2 lang-block="en">Not vibes: two tool-catalog snapshots in the request headers</h2>
-    <p class="lead" lang-block="zh">导出会话 JSONL 检查 <code>request/header</code> 事件，harness 0.1.0-rc.6 实测：</p>
-    <p class="lead" lang-block="en">Export the session JSONL and inspect <code>request/header</code> events, measured on harness 0.1.0-rc.6:</p>
-    <div class="wire">
+<!-- 屏 4 · Wire 证据 -->
+<section class="screen s4">
+  <div class="inner">
+    <div class="kicker rise d1" lang-block="zh">Wire 层硬证据</div>
+    <div class="kicker rise d1" lang-block="en">Wire-level evidence</div>
+    <h2 class="rise d1" lang-block="zh">不是玄学：请求头里的工具目录快照</h2>
+    <h2 class="rise d1" lang-block="en">Not vibes: tool-catalog snapshots in request headers</h2>
+
+    <div class="wire rise d2">
       <div class="line">
         <span class="seq">seq 18</span>
         <span class="tag boot">BOOTSTRAP</span>
-        <span class="txt">2 tools — ['bash', 'read'] · system: "You are a helpful software engineer assistant."</span>
+        <span class="txt">3 tools — ['bash', 'read', 'edit'] · fix task · Minimal persona only</span>
       </div>
       <div class="line">
         <span class="seq">seq 129</span>
         <span class="tag">SIGNAL</span>
-        <span class="txt">first assistant/message (or tool/call) — promotion signal</span>
+        <span class="txt">first tool/call — promotion signal</span>
       </div>
       <div class="line">
         <span class="seq">seq 137</span>
@@ -431,44 +521,62 @@ workflow, write, ...] <span class="h">×25</span></pre>
         <span class="txt">25 tools — ask_user_question, bash, edit, glob, grep, subagent, web_search, workflow, write, …</span>
       </div>
     </div>
-    <p class="tools-note" lang-block="zh" style="margin-top:14px">晋升状态来自持久化会话事件：刷新页面、恢复会话，锚定都不会回退。</p>
-    <p class="tools-note" lang-block="en" style="margin-top:14px">Promotion is derived from durable session events: refresh or resume never falls back to bootstrap.</p>
-  </section>
+    <p class="foot rise d3" lang-block="zh">harness 0.1.0-rc.6 实测 · 分类与晋升状态存于持久化会话事件，刷新/恢复不回退</p>
+    <p class="foot rise d3" lang-block="en">Measured on harness 0.1.0-rc.6 · mode and promotion live in durable session events</p>
+  </div>
+</section>
 
-  <section class="fade-in" id="install">
-    <div class="kicker" lang-block="zh">安装</div>
-    <div class="kicker" lang-block="en">Install</div>
-    <h2 lang-block="zh">一条命令，开箱即用</h2>
-    <h2 lang-block="en">One command, ready to go</h2>
-    <div class="install">
+<!-- 屏 5 · 安装 -->
+<section class="screen s5">
+  <div class="inner">
+    <div class="kicker rise d1" lang-block="zh">安装</div>
+    <div class="kicker rise d1" lang-block="en">Install</div>
+    <h2 class="rise d1" lang-block="zh">一条命令，开箱即用</h2>
+    <h2 class="rise d1" lang-block="en">One command, ready to go</h2>
+
+    <div class="install-bar rise d2">
       <code>dsh plugin --profile web add github:Jungod1121/dsh-anchored-standard</code>
       <button class="copy" onclick="copyCmd()">复制 / Copy</button>
     </div>
-    <div class="tools-note" style="margin-top:14px" lang-block="zh">
-      重启 Harness → 预设自动落盘 → 新建空白会话选「锚定标准模式」。设为默认：在
-      <code>settings.yaml</code> 写 <code>agent-presets.default: anchored-standard</code>。
-      不想装 bundle？也可以手动把仓库的 <code>preset/</code> 目录复制到
-      <code>~/.dsh/.agent-presets/anchored-standard/</code>。
-    </div>
-    <div class="tools-note" style="margin-top:14px" lang-block="en">
-      Restart Harness → the preset lands automatically → create a blank session
-      and pick "Anchored Standard (experimental)". Make it the default via
-      <code>agent-presets.default: anchored-standard</code> in
-      <code>settings.yaml</code>. Prefer no bundle? Copy the repo's
-      <code>preset/</code> directory to
-      <code>~/.dsh/.agent-presets/anchored-standard/</code> manually.
-    </div>
-  </section>
 
-  <section class="fade-in" id="compare">
-    <div class="kicker" lang-block="zh">对比与边界</div>
-    <div class="kicker" lang-block="en">Trade-offs & boundaries</div>
-    <h2 lang-block="zh">你得到什么，付出什么</h2>
-    <h2 lang-block="en">What you get, what you give up</h2>
-    <p class="lead" lang-block="zh">锚定标准相对两个官方预设的两两对比：</p>
-    <p class="lead" lang-block="en">Anchored Standard compared against the two official presets:</p>
+    <div class="mob-note foot" lang-block="zh" style="display:none;margin-top:14px">重启 Harness → 新会话首轮自动按任务选锚 → 首个信号后 25 工具全解锁</div>
+    <div class="mob-note foot" lang-block="en" style="display:none;margin-top:14px">Restart → new session auto-picks its anchor → all 25 tools unlock after the first signal</div>
+    <div class="steps">
+      <div class="steprow glass rise d2">
+        <div class="no">1</div>
+        <h3 lang-block="zh">安装</h3>
+        <h3 lang-block="en">Install</h3>
+        <p lang-block="zh">一条命令预设自动落盘；或手动复制 <code>preset/</code> 目录。</p>
+        <p lang-block="en">One command lands the preset; or copy <code>preset/</code> manually.</p>
+      </div>
+      <div class="steprow glass rise d3">
+        <div class="no">2</div>
+        <h3 lang-block="zh">新会话</h3>
+        <h3 lang-block="en">New session</h3>
+        <p lang-block="zh">首轮自动按任务选锚：<code>bash+read+edit</code> 或 <code>+write</code>。</p>
+        <p lang-block="en">First turn auto-picks the anchor: <code>bash+read+edit</code> or <code>+write</code>.</p>
+      </div>
+      <div class="steprow glass rise d4">
+        <div class="no">3</div>
+        <h3 lang-block="zh">干活</h3>
+        <h3 lang-block="en">Work</h3>
+        <p lang-block="zh">首个信号后 <code>25 工具</code> 全部解锁，设为默认：<code>agent-presets.default: anchored-standard</code>。</p>
+        <p lang-block="en">All <code>25 tools</code> unlock after the signal; make it default via <code>agent-presets.default: anchored-standard</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 屏 6 · 对比与边界 -->
+<section class="screen s6">
+  <div class="inner">
+    <div class="kicker rise d1" lang-block="zh">对比与边界</div>
+    <div class="kicker rise d1" lang-block="en">Trade-offs & boundaries</div>
+    <h2 class="rise d1" lang-block="zh">你得到什么，付出什么</h2>
+    <h2 class="rise d1" lang-block="en">What you get, what you give up</h2>
+
     <div class="table-scroll">
-      <div class="glass" style="padding: 4px 0;">
+      <div class="glass" style="padding: 6px 0;">
         <table>
           <tr>
             <th><span lang-block="zh">对比</span><span lang-block="en">Compared to</span></th>
@@ -482,63 +590,95 @@ workflow, write, ...] <span class="h">×25</span></pre>
           </tr>
           <tr>
             <td class="n">vs Standard</td>
-            <td class="ok"><span lang-block="zh">RL 对齐的轨迹锚定（98/99 vs 91/92）</span><span lang-block="en">RL-aligned trajectory anchor (98/99 vs 91/92)</span></td>
-            <td><span lang-block="zh">Minimal 完整 persona 会压住 plan-mode 等注入文本（锚定的来源，也是代价）</span><span lang-block="en">the complete Minimal persona shadows plan-mode etc. (the anchor's source, and its cost)</span></td>
+            <td class="ok"><span lang-block="zh">任务匹配的轨迹锚定（98/99 vs 91/92）</span><span lang-block="en">task-matched trajectory anchors (98/99 vs 91/92)</span></td>
+            <td><span lang-block="zh">首轮目录由关键词分类决定；模糊任务回落 weak 交给模型</span><span lang-block="en">first-turn catalog is keyword-classified; ambiguous tasks fall back to weak</span></td>
           </tr>
         </table>
       </div>
     </div>
-    <p class="foot" lang-block="zh">
-      诚实声明：98/99 来自 xiaobright/modeltest Project2 V4.1b——同一冻结题面 n=2。
-      这是该题面的可复现证据，不是跨任务、跨模型的通用保证；V4 Flash 不需要这套
-      （它跨 harness 泛化更稳），本预设面向 Pro + reasoningEffort=max。
+    <p class="foot rise d4" lang-block="zh">
+      诚实声明：98/99 来自 xiaobright/modeltest Project2 V4.1b——同一冻结题面 n=2，
+      不构成跨任务、跨模型的通用保证；本预设面向 Pro + reasoningEffort=max。
     </p>
-    <p class="foot" lang-block="en">
-      Honest boundaries: 98/99 comes from xiaobright/modeltest Project2 V4.1b —
-      n=2 on one frozen task. Reproducible evidence for that task, not a
-      universal guarantee; V4 Flash doesn't need this (it generalizes better
-      across harnesses). This preset targets Pro with reasoningEffort=max.
+    <p class="foot rise d4" lang-block="en">
+      Honest boundaries: 98/99 is from xiaobright/modeltest Project2 V4.1b — n=2
+      on one frozen task, not a universal guarantee. Targets Pro + reasoningEffort=max.
     </p>
-  </section>
-
-  <section class="fade-in">
-    <div class="kicker">FAQ</div>
-    <h2 lang-block="zh">常见问题</h2>
-    <h2 lang-block="en">FAQ</h2>
-    <details class="glass">
-      <summary><span lang-block="zh">这和直接开官方 Minimal 有什么区别？</span><span lang-block="en">How is this different from just using the official Minimal preset?</span></summary>
-      <p lang-block="zh">Minimal 全程只有 2 个工具，干不了多文件工程（没有 glob/grep/edit/子代理/网页搜索）。本预设只借用它的「开局」，首个信号后展开全部 25 工具——Minimal 的脑子 + Standard 的手脚。</p>
-      <p lang-block="en">Minimal keeps only 2 tools for the whole task — no glob/grep/edit/subagents/web search. This preset borrows only its opening; after the first signal all 25 tools appear. Minimal's brain, Standard's hands.</p>
-    </details>
-    <details class="glass">
-      <summary><span lang-block="zh">我能不能手动「先用 Minimal、中途切 Standard」达到同样效果？</span><span lang-block="en">Can I just switch from Minimal to Standard mid-task manually?</span></summary>
-      <p lang-block="zh">不能。中途切换 preset 会破坏会话，而且新 preset 会话的首轮又是全工具目录——锚定就丢了。两阶段必须发生在同一个会话、同一个请求流里，这正是本预设做的事。</p>
-      <p lang-block="en">No. Switching presets mid-session breaks it, and a fresh Standard session would open with the full catalog again — the anchor is gone. The two phases must happen inside one session and one request stream, which is exactly what this preset does.</p>
-    </details>
-    <details class="glass">
-      <summary><span lang-block="zh">换台机器 / 换 V4 Flash 有用吗？</span><span lang-block="en">Does it work with other models, like V4 Flash?</span></summary>
-      <p lang-block="zh">V4 Flash 跨 harness 泛化更稳，风格会变、分数不变，用不上这套。锚定增益目前只在 V4 Pro 上被观测到，且评测证据是 n=2 单题。</p>
-      <p lang-block="en">V4 Flash generalizes across harnesses (style changes, scores don't), so it doesn't need this. The anchor gain has only been observed on V4 Pro, with n=2 single-task evidence.</p>
-    </details>
-    <details class="glass">
-      <summary><span lang-block="zh">装完后悔了怎么卸？</span><span lang-block="en">How do I uninstall?</span></summary>
-      <p><code>dsh plugin --profile web remove dsh-anchored-standard</code> <span lang-block="zh">卸载 bundle；再</span><span lang-block="en"> to remove the bundle, then</span> <code>rm -rf ~/.dsh/.agent-presets/anchored-standard</code> <span lang-block="zh">删除预设目录。</span><span lang-block="en">to remove the preset directory.</span></p>
-    </details>
-  </section>
-</div>
-
-<footer>
-  <div class="links">
-    <a href="https://github.com/Jungod1121/dsh-anchored-standard" target="_blank" rel="noopener">GitHub</a>
-    <a href="https://github.com/awesome-dsh-plugin/awesome-dsh-plugin" target="_blank" rel="noopener">awesome-dsh-plugin</a>
-    <a href="https://github.com/xiaobright/dsh-anchored-standard" target="_blank" rel="noopener">设计原型 xiaobright</a>
-    <a href="https://github.com/xiaobright/modeltest" target="_blank" rel="noopener">modeltest 评测</a>
   </div>
-  <div lang-block="zh">社区项目 · 非 DeepSeek 官方预设 · MIT 许可证</div>
-  <div lang-block="en">Community project · not an official DeepSeek preset · MIT license</div>
-</footer>
+</section>
+
+<!-- 屏 7 · FAQ + 页脚 -->
+<section class="screen s7">
+  <div class="inner">
+    <div class="kicker rise d1">FAQ</div>
+    <h2 class="rise d1" lang-block="zh">常见问题</h2>
+    <h2 class="rise d1" lang-block="en">FAQ</h2>
+
+    <div class="faqs">
+      <details class="glass rise d2">
+        <summary><span lang-block="zh">和官方 Minimal 有什么区别？</span><span lang-block="en">vs the official Minimal preset?</span></summary>
+        <p lang-block="zh">Minimal 全程只有 2 工具。本预设只借它的「开局」，信号后展开全部 25 工具——Minimal 的脑子 + Standard 的手脚。</p>
+        <p lang-block="en">Minimal keeps 2 tools forever. This borrows only its opening; all 25 tools appear after the signal.</p>
+      </details>
+      <details class="glass rise d2">
+        <summary><span lang-block="zh">手动「先用 Minimal、中途切 Standard」行吗？</span><span lang-block="en">Can I switch presets mid-task?</span></summary>
+        <p lang-block="zh">不行。切换会破坏会话，新会话首轮又是全目录，锚就丢了。两阶段必须在同一会话、同一请求流里。</p>
+        <p lang-block="en">No. Switching breaks the session and re-opens the full catalog — the anchor is gone.</p>
+      </details>
+      <details class="glass rise d3">
+        <summary><span lang-block="zh">修复/构建任务怎么判断的？</span><span lang-block="en">How are fix/build tasks detected?</span></summary>
+        <p lang-block="zh">第一条消息的关键词分类（修复/调试 vs 开发/创建），平局或无法判断时回落 weak，让模型自己选。</p>
+        <p lang-block="en">Keyword classification of the first message; ties fall back to weak and the model picks.</p>
+      </details>
+      <details class="glass rise d3">
+        <summary><span lang-block="zh">装完后悔了怎么卸？</span><span lang-block="en">How do I uninstall?</span></summary>
+        <p><code>dsh plugin --profile web remove dsh-anchored-standard</code> · <code>rm -rf ~/.dsh/.agent-presets/anchored-standard</code></p>
+      </details>
+    </div>
+
+    <div class="footer-links rise d4">
+      <a href="https://github.com/Jungod1121/dsh-anchored-standard" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/awesome-dsh-plugin/awesome-dsh-plugin" target="_blank" rel="noopener">awesome-dsh-plugin</a>
+      <a href="https://github.com/xiaobright/dsh-anchored-standard" target="_blank" rel="noopener">xiaobright 原型</a>
+      <a href="https://github.com/xiaobright/modeltest" target="_blank" rel="noopener">modeltest 评测</a>
+      <span lang-block="zh">社区项目 · 非官方预设 · MIT</span>
+      <span lang-block="en">Community project · not official · MIT</span>
+    </div>
+  </div>
+</section>
 
 <script>
+  const SCREENS = () => [...document.querySelectorAll('section.screen')];
+  const DOTS = document.getElementById('dots');
+
+  function initDots() {
+    SCREENS().forEach((_, i) => {
+      const b = document.createElement('button');
+      b.setAttribute('aria-label', 'section ' + (i + 1));
+      b.addEventListener('click', () => go(i));
+      DOTS.appendChild(b);
+    });
+  }
+  function go(i) {
+    SCREENS()[i]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function updateDots(active) {
+    [...DOTS.children].forEach((b, i) => b.classList.toggle('on', i === active));
+  }
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const idx = SCREENS().indexOf(e.target);
+        updateDots(idx);
+        e.target.classList.add('in-view');
+      }
+    }, { threshold: 0.55 });
+    SCREENS().forEach((s) => io.observe(s));
+  } else {
+    SCREENS().forEach((s) => s.classList.add('in-view'));
+  }
+
   function setLang(lang) {
     document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
     document.querySelectorAll('[lang-block]').forEach((el) => {
@@ -561,10 +701,21 @@ workflow, write, ...] <span class="h">×25</span></pre>
       done(false);
     }
   }
+
+  initDots();
+  updateDots(0);
   let initial = 'zh';
   try { initial = localStorage.getItem('dsh-anchored-lang') || 'zh'; } catch (e) {}
   if (navigator.language && navigator.language.startsWith('en') && !localStorage.getItem('dsh-anchored-lang')) initial = 'en';
   setLang(initial);
+  SCREENS()[0].classList.add('in-view');
+
+  if (new URLSearchParams(location.search).has('check')) {
+    setTimeout(() => {
+      const parts = SCREENS().map((s, i) => i + ':' + s.scrollHeight);
+      document.title = 'CHECK vh=' + window.innerHeight + ' screens=[' + parts.join(',') + ']';
+    }, 800);
+  }
 </script>
 </body>
 </html>
