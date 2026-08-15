@@ -29,6 +29,8 @@
  * throwing; any filter failure also degrades to the full catalog.
  */
 
+import { appendFileSync } from 'node:fs'
+
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'anchored-tool-bootstrap'
 
@@ -152,6 +154,13 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  let dbgCount = 0
+  const dbg = (msg) => {
+    if (dbgCount >= 60) return
+    dbgCount += 1
+    try { appendFileSync('/tmp/anchored-v2-debug.log', new Date().toISOString() + ' ' + msg + '\n') } catch { /* ignore */ }
+  }
+
   const messageText = (message) => {
     if (!message) return ''
     const content = Array.isArray(message.content) ? message.content : []
@@ -164,11 +173,14 @@ export function apply(ctx, config = {}) {
     const decision = await next()
     try {
       const session = payload && payload.agent && payload.agent.session
+      dbg('pre-step fired; payloadKeys=' + Object.keys(payload || {}).join(',') + '; hasSession=' + (session !== undefined))
       if (!session || firstTexts.has(session.id)) return decision
       const messages = Array.isArray(payload.messages) ? payload.messages : []
+      dbg('pre-step messages=' + messages.length + '; kinds=' + messages.map((m) => (m && m.source && m.source.kind) || (m && m.role) || '?').join('|'))
       const first = messages.find((m) => m && m.source && m.source.kind === 'user')
       if (first === undefined) return decision // system reminders do not classify
       const text = messageText(first)
+      dbg('pre-step captured text=' + JSON.stringify(text.slice(0, 80)))
       if (text.trim()) firstTexts.set(session.id, text)
     } catch {
       // Observation only — never disturb the step pipeline.
@@ -202,6 +214,7 @@ export function apply(ctx, config = {}) {
       const session = agent ? agent.session : undefined
       if (session === undefined) return assembled
       const mode = resolveMode(session)
+      dbg('assemble; hasFirstText=' + firstTexts.has(session.id) + '; mode=' + mode + '; userEvents=' + (Array.isArray(session.events) ? session.events.filter((e) => e && e.type === 'user/message').length : -1) + '; promoted=' + isPromoted(session))
       const modelId = (agent.options && agent.options.model) || ''
       const persona = personaFor(mode, modelId)
 
