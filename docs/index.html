@@ -465,26 +465,25 @@ workflow, write, ...] <span class="h">×25</span></pre>
     <div class="kicker" lang-block="en">Trade-offs & boundaries</div>
     <h2 lang-block="zh">你得到什么，付出什么</h2>
     <h2 lang-block="en">What you get, what you give up</h2>
+    <p class="lead" lang-block="zh">锚定标准相对两个官方预设的两两对比：</p>
+    <p class="lead" lang-block="en">Anchored Standard compared against the two official presets:</p>
     <div class="table-scroll">
       <div class="glass" style="padding: 4px 0;">
         <table>
           <tr>
-            <th lang-block="zh">对比</th><th lang-block="en">Compared to</th>
-            <th lang-block="zh">得到</th><th lang-block="en">You get</th>
-            <th lang-block="zh">代价</th><th lang-block="en">Trade-off</th>
+            <th><span lang-block="zh">对比</span><span lang-block="en">Compared to</span></th>
+            <th><span lang-block="zh">得到</span><span lang-block="en">You get</span></th>
+            <th><span lang-block="zh">代价</span><span lang-block="en">Trade-off</span></th>
           </tr>
           <tr>
             <td class="n">vs Minimal</td>
             <td class="ok">+23 工具</td>
-            <td lang-block="zh">开局多一轮推理，几乎无感</td>
-            <td lang-block="en">one extra bootstrap reasoning round</td>
+            <td><span lang-block="zh">开局多一轮推理，几乎无感</span><span lang-block="en">one extra bootstrap reasoning round</span></td>
           </tr>
           <tr>
             <td class="n">vs Standard</td>
-            <td class="ok" lang-block="zh">RL 对齐的轨迹锚定（98/99 vs 91/92）</td>
-            <td class="ok" lang-block="en">RL-aligned trajectory anchor (98/99 vs 91/92)</td>
-            <td lang-block="zh">Minimal 完整 persona 会压住 plan-mode 等注入文本（锚定的来源，也是代价）</td>
-            <td lang-block="en">the complete Minimal persona shadows plan-mode etc. (the anchor's source, and its cost)</td>
+            <td class="ok"><span lang-block="zh">RL 对齐的轨迹锚定（98/99 vs 91/92）</span><span lang-block="en">RL-aligned trajectory anchor (98/99 vs 91/92)</span></td>
+            <td><span lang-block="zh">Minimal 完整 persona 会压住 plan-mode 等注入文本（锚定的来源，也是代价）</span><span lang-block="en">the complete Minimal persona shadows plan-mode etc. (the anchor's source, and its cost)</span></td>
           </tr>
         </table>
       </div>
@@ -507,26 +506,22 @@ workflow, write, ...] <span class="h">×25</span></pre>
     <h2 lang-block="zh">常见问题</h2>
     <h2 lang-block="en">FAQ</h2>
     <details class="glass">
-      <summary lang-block="zh">这和直接开官方 Minimal 有什么区别？</summary>
-      <summary lang-block="en">How is this different from just using the official Minimal preset?</summary>
+      <summary><span lang-block="zh">这和直接开官方 Minimal 有什么区别？</span><span lang-block="en">How is this different from just using the official Minimal preset?</span></summary>
       <p lang-block="zh">Minimal 全程只有 2 个工具，干不了多文件工程（没有 glob/grep/edit/子代理/网页搜索）。本预设只借用它的「开局」，首个信号后展开全部 25 工具——Minimal 的脑子 + Standard 的手脚。</p>
       <p lang-block="en">Minimal keeps only 2 tools for the whole task — no glob/grep/edit/subagents/web search. This preset borrows only its opening; after the first signal all 25 tools appear. Minimal's brain, Standard's hands.</p>
     </details>
     <details class="glass">
-      <summary lang-block="zh">我能不能手动「先用 Minimal、中途切 Standard」达到同样效果？</summary>
-      <summary lang-block="en">Can I just switch from Minimal to Standard mid-task manually?</summary>
+      <summary><span lang-block="zh">我能不能手动「先用 Minimal、中途切 Standard」达到同样效果？</span><span lang-block="en">Can I just switch from Minimal to Standard mid-task manually?</span></summary>
       <p lang-block="zh">不能。中途切换 preset 会破坏会话，而且新 preset 会话的首轮又是全工具目录——锚定就丢了。两阶段必须发生在同一个会话、同一个请求流里，这正是本预设做的事。</p>
       <p lang-block="en">No. Switching presets mid-session breaks it, and a fresh Standard session would open with the full catalog again — the anchor is gone. The two phases must happen inside one session and one request stream, which is exactly what this preset does.</p>
     </details>
     <details class="glass">
-      <summary lang-block="zh">换台机器 / 换 V4 Flash 有用吗？</summary>
-      <summary lang-block="en">Does it work with other models, like V4 Flash?</summary>
+      <summary><span lang-block="zh">换台机器 / 换 V4 Flash 有用吗？</span><span lang-block="en">Does it work with other models, like V4 Flash?</span></summary>
       <p lang-block="zh">V4 Flash 跨 harness 泛化更稳，风格会变、分数不变，用不上这套。锚定增益目前只在 V4 Pro 上被观测到，且评测证据是 n=2 单题。</p>
       <p lang-block="en">V4 Flash generalizes across harnesses (style changes, scores don't), so it doesn't need this. The anchor gain has only been observed on V4 Pro, with n=2 single-task evidence.</p>
     </details>
     <details class="glass">
-      <summary lang-block="zh">装完后悔了怎么卸？</summary>
-      <summary lang-block="en">How do I uninstall?</summary>
+      <summary><span lang-block="zh">装完后悔了怎么卸？</span><span lang-block="en">How do I uninstall?</span></summary>
       <p><code>dsh plugin --profile web remove dsh-anchored-standard</code> <span lang-block="zh">卸载 bundle；再</span><span lang-block="en"> to remove the bundle, then</span> <code>rm -rf ~/.dsh/.agent-presets/anchored-standard</code> <span lang-block="zh">删除预设目录。</span><span lang-block="en">to remove the preset directory.</span></p>
     </details>
   </section>
