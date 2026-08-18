@@ -218,7 +218,13 @@ export function apply(ctx, config = {}) {
       const session = agent ? agent.session : undefined
       if (session === undefined) return assembled
       const mode = resolveMode(session)
-      const modelId = (agent.options && agent.options.model) || ''
+      // Prefer the session's actually-selected model (what the request will
+      // use): the page model picker lands in assembled.variables, while
+      // agent.options.model may still hold the deployment default.
+      const modelId =
+        (assembled && assembled.variables && assembled.variables.model) ||
+        (agent.options && agent.options.model) ||
+        ''
       const persona = personaFor(mode, modelId)
 
       if (isPromoted(session)) {
